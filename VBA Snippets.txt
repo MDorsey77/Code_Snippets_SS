@@ -1,0 +1,129 @@
+
+Public Sub UserForm_Initialize()
+'
+'Date 2/19/2011
+'Created by Michael Dorsey for Elementis Specialties, Inc.
+'
+'Purpose: Program to facilitate entering the plant and laboratory data into the same spreadsheet which is accessible through Excel
+'
+'
+'
+'
+
+Dim efb_1st_display_filter_change_button As Boolean
+Dim efb_2nd_display_filter_change_button As Boolean
+Dim wfb_1st_display_filter_change_button As Boolean
+Dim wfb_2nd_display_filter_change_button As Boolean
+
+Dim display_time as date                               'Holds a formatted current time for display
+Dim display_date as date                               'Holds a formatted current date for display
+Dim current_year as string
+Dim i As Integer 
+Dim Computer_Name As String
+
+Application.ScreenUpdating = False
+
+'
+'Initialize some variables and do some housekeeping
+'
+ReDim saved_line_numbers(1000)                      'Holds the line numbers that were changed so they can be copied to the s-drive
+ReDim nwa_array(10000)                              'Holds the information so the program can write data to nwa files for management
+a_loi_path = ThisWorkbook.path & "\aloi.gif"        'path for the GIF file for A side LOI
+dd_h2o_path = ThisWorkbook.path & "\ddh2o.gif"      'path for the GIF file for DD side LOI
+
+main_screen_change_flag = False
+enable_events = True
+   
+b990_ucl_percent_organic = 25
+b990_lcl_percent_organic = 21
+b990_xbar_percent_organic = 23
+b990_u2sigma_percent_organic = 24
+b990_l2sigma_percent_organic = 22
+ 
+'   
+'Get Host Computer Name
+'
+Computer_Name = Environ$("computername")
+ 
+'   
+'Get the A and C Reaction Product Lists
+'
+ReDim Product_List(1000)
+Call Initialize_Product_List(Product_List)
+Call Fill_Product_List(Product_List, "Menu Sheet", list_size, "A_Reactions_Products", "C_Reactions_Products")
+ReDim Preserve Product_List(list_size)
+
+'
+'Get the reaction headers and their limits and messages
+ReDim Reaction_Header_List(10000)
+list_size = 0
+Call Fill_Reaction_Header_List(Reaction_Header_List, "Menu Sheet", list_size, "A_Reaction_Headers", "C_Reaction_Headers")
+ReDim Preserve Reaction_Header_List(list_size)
+   
+ReDim pdf_showed(1000)
+Dim size_2 As Integer
+Call initialize_pdf_showed_array(pdf_showed, size_2)
+ReDim Preserve pdf_showed(size_2)
+
+'Get the Elementis Date
+elementis_date = Get_Elementis_Date(date)               'Calls the function to obtain the current Elementis Date and then formats it
+display_date = Format(elementis_date, "mmmm dd, yyyy")  'Formats the current date to month, day, and year
+DTPicker1.value = display_date
+current_year = Year(display_date)
+
+'Check to see if the current year has a data sheet. If not then create it.
+If Not SheetExists(reactions_worksheet_name) Then
+   Call Fill_in_sheet_with_dates(reactions_worksheet_name, previous_years_worksheet_name)
+End If
+
+'Create the directories for the screenshots and logs
+Call Fix_Log_Directories("Reactions", reactions_screen_shot_path, reactions_destination_folder, master_date)
+
+'Create the directories for the screenshots and logs backup files
+Call Fix_Log_Directories("Reactions", backup_screenshot_path, screenshot_backup_destination_folder, master_date)
+Call Initialize_SPC_Trend_array(SPC_error_high_low_trend)
+Call Initialize_Frame_Visible_Array(frame_visibility)
+Call Initialize_saved_line_numbers(saved_line_numbers)
+
+
+'Get the column headers and resize some arraya 
+'
+temp_no_items = Sheets("Menu Sheet").Range("A_Reaction_Headers").Rows.count + _
+                Sheets("Menu Sheet").Range("C_Reaction_Headers").Rows.count + _
+                Sheets("Menu Sheet").Range("Miscellaneous_Column_Headers").Rows.count
+ReDim header_info_reactions(temp_no_items - 1)            'Redimension the array to hold all the header names for all the departments -
+ReDim header_info_rx_previous_year(temp_no_items - 1)
+ReDim s_drive_header_info(temp_no_items - 1)
+ReDim s_drive_header_info_previous_year(temp_no_items - 1)
+
+'
+'Do Loop Example
+'
+Do
+    If counter < Sheets("Menu Sheet").Range("A_Reaction_Headers").Rows.count Then       'checks less than because array starts at position 0
+        For Each head_name In Range("A_Reaction_Headers")
+            temp_head_name = head_name.value
+            header_info_reactions(counter).header_name = temp_head_name
+            header_info_reactions(counter).column_no = Get_Header_Column_from_Header_Row(temp_head_name, reactions_worksheet_name, header_row)
+            counter = counter + 1
+        Next head_name
+    ElseIf counter < Sheets("Menu Sheet").Range("A_Reaction_Headers").Rows.count + _
+                     Sheets("Menu Sheet").Range("C_Reaction_Headers").Rows.count Then
+        For Each head_name In Range("C_Reaction_Headers")
+            temp_head_name = head_name.value
+            header_info_reactions(counter).header_name = temp_head_name
+            header_info_reactions(counter).column_no = Get_Header_Column_from_Header_Row(temp_head_name, reactions_worksheet_name, header_row)
+            counter = counter + 1
+        Next head_name
+    ElseIf counter < (Sheets("Menu Sheet").Range("A_Reaction_Headers").Rows.count + _
+                     Sheets("Menu Sheet").Range("C_Reaction_Headers").Rows.count + _
+                     Sheets("Menu Sheet").Range("Miscellaneous_Column_Headers").Rows.count) Then
+        For Each head_name In Range("Miscellaneous_Column_Headers")
+            temp_head_name = head_name.value
+            header_info_reactions(counter).header_name = temp_head_name
+            header_info_reactions(counter).column_no = Get_Header_Column_from_Header_Row(temp_head_name, reactions_worksheet_name, header_row)
+            counter = counter + 1
+        Next head_name
+    all_done = True  'set flag to true so loop knows it is finished
+    End If
+Loop Until all_done = True
